@@ -1,0 +1,362 @@
+## Overview
+
+The **Detection & Acceptance Profile** bucket characterizes how your model’s **detection power** and **acceptance behavior** change as you move the decision threshold on the positive-class score.
+
+It answers questions like:
+
+* “If I tighten my threshold to reduce volume, how much recall do I lose?”
+* “Where is the best operating point to balance business capacity and risk?”
+
+This bucket supports:
+
+* **Binary classification**, directly on the positive-class score
+* **Multiclass classification**, via per-class one-vs-rest profiles
+
+## Metrics
+
+Let `TP`, `FP`, `FN`, `TN` be computed at a given threshold, with `Total = TP + FP + FN + TN`.
+
+**capture_rate**  
+Fraction of the population that the model “captures” as positive (acceptance volume):
+
+```text
+capture_rate = (TP + FP) / Total
+```
+
+**correct_detection_rate**  
+Overall fraction of correct decisions (global accuracy):
+
+```text
+correct_detection_rate = (TP + TN) / Total
+```
+
+**true_detection_rate**  
+Quality of the accepted positives, i.e., precision:
+
+```text
+true_detection_rate = TP / (TP + FP)
+```
+
+**true_positive_rate**  
+Classic recall / TPR:
+
+```text
+true_positive_rate = TP / (TP + FN)
+```
+
+**correct_acceptance_rate**  
+Fraction of all cases that are **correctly accepted** as positive:
+
+```text
+correct_acceptance_rate = TP / Total
+```
+
+**valid_detection_rate**  
+Same quantity as accuracy but used explicitly in plots with “acceptance”:
+
+```text
+valid_detection_rate = (TP + TN) / Total
+```
+
+> You can compute all of these from a single confusion matrix per threshold and bucket.
+
+## Data Requirements
+
+* `{{label_col}}` – ground truth binary label (or per-class label for multiclass)
+* `{{score_col}}` – predicted probability or score for the positive class
+* `{{timestamp_col}}` – event or prediction time
+
+## Base Metric SQL — Threshold Grid
+
+```sql
+WITH base AS (
+    SELECT
+        {{timestamp_col}} AS event_ts,
+        {{label_col}}    AS label,
+        {{score_col}}    AS score
+    FROM {{dataset}}
+),
+grid AS (
+    SELECT
+        generate_series(0.0, 1.0, 0.01) AS threshold
+),
+scored AS (
+    SELECT
+        time_bucket(INTERVAL '5 minutes', event_ts) AS ts,
+        g.threshold,
+        label,
+        score,
+        CASE WHEN score >= g.threshold THEN 1 ELSE 0 END AS pred_pos
+    FROM base
+    CROSS JOIN grid g
+)
+SELECT
+    ts,
+    threshold,
+    COUNT(*)                                                   AS total,
+    SUM(CASE WHEN label = 1 THEN 1 ELSE 0 END)                AS actual_pos,
+    SUM(CASE WHEN label = 0 THEN 1 ELSE 0 END)                AS actual_neg,
+    SUM(CASE WHEN pred_pos = 1 AND label = 1 THEN 1 ELSE 0 END) AS tp,
+    SUM(CASE WHEN pred_pos = 1 AND label = 0 THEN 1 ELSE 0 END) AS fp,
+    SUM(CASE WHEN pred_pos = 0 AND label = 1 THEN 1 ELSE 0 END) AS fn,
+    SUM(CASE WHEN pred_pos = 0 AND label = 0 THEN 1 ELSE 0 END) AS tn
+FROM scored
+GROUP BY ts, threshold
+ORDER BY ts, threshold;
+```
+
+You can register `tp`, `fp`, `fn`, `tn`, and `total` as reported metrics, and derive the named rates in queries or as additional reported metrics.
+
+## Plots
+
+> Preview Data
+>
+> for startDate use 2025-11-26T17:54:05.425Z
+> for endDate use 2025-12-10T17:54:05.425Z
+
+### Plot 1 — Recall Variants Over Time
+
+Uses:
+
+* `capture_rate`
+* `correct_detection_rate`
+* `true_detection_rate`
+* `true_positive_rate`
+
+```sql
+SELECT 
+    time_bucket_gapfill(
+        '1 day',
+        timestamp,
+        '{{dateStart}}'::timestamptz,
+        '{{dateEnd}}'::timestamptz
+    ) AS time_bucket_1d,
+    
+    metric_name,
+    
+    CASE 
+        WHEN metric_name = 'true_detection_rate'	   THEN 'True Detection Rate'
+        WHEN metric_name = 'capture_rate'						 THEN 'Capture Rate'
+				WHEN metric_name = 'true_positive_rate'			 THEN 'True Positive Rate'
+        WHEN metric_name = 'correct_acceptance_rate' THEN 'Correct Acceptance Rate'
+        ELSE metric_name
+    END AS friendly_name,
+    
+    COALESCE(AVG(value), 0) AS metric_value
+
+FROM metrics_numeric_latest_version
+WHERE metric_name IN (
+    'true_detection_rate',
+	  'capture_rate',
+  	'true_positive_rate',
+		'correct_acceptance_rate'
+)
+[[AND timestamp BETWEEN '{{dateStart}}' AND '{{dateEnd}}']]
+
+GROUP BY time_bucket_1d, metric_name
+ORDER BY time_bucket_1d, metric_name;
+```
+
+**What this shows**  
+For each day and threshold, this plot shows how **volume**, **accuracy**, **precision**, and **recall** move together. It lets you see how different operating points behave over time.
+
+**How to interpret it**
+
+* Use vertical slices (fixed `day`) to compare thresholds and choose an operating point.
+* Use horizontal slices (fixed `threshold`) to see whether recall or precision is drifting.
+* If `capture_rate` is stable but `true_detection_rate` drops, the model is accepting the same volume but with worse quality (precision regression).
+
+***
+
+### Plot 2— Acceptance + Accuracy
+
+Uses:
+
+* `correct_acceptance_rate`
+* `valid_detection_rate`
+
+```sql
+SELECT 
+    time_bucket_gapfill(
+        '1 day',
+        timestamp,
+        '{{dateStart}}'::timestamptz,
+        '{{dateEnd}}'::timestamptz
+    ) AS time_bucket_1d,
+    
+    metric_name,
+    
+    CASE 
+        WHEN metric_name = 'valid_detection_rate'      THEN 'Valid Detection Rate'
+        WHEN metric_name = 'correct_acceptance_rate' THEN 'Correct Acceptance Rate'
+        ELSE metric_name
+    END AS friendly_name,
+    
+    COALESCE(AVG(value), 0) AS metric_value
+
+FROM metrics_numeric_latest_version
+WHERE metric_name IN (
+    'valid_detection_rate',
+    'correct_acceptance_rate'
+)
+[[AND timestamp BETWEEN '{{dateStart}}' AND '{{dateEnd}}']]
+
+GROUP BY time_bucket_1d, metric_name
+ORDER BY time_bucket_1d, metric_name;
+```
+
+**What this shows**  
+This plot focuses on **how many cases are correctly picked up as positive** (correct_acceptance_rate) vs **how often the model is right overall** (valid_detection_rate).
+
+**How to interpret it**
+
+* Points with **high valid_detection_rate but low correct_acceptance_rate** mean the model is accurate but conservative—good at saying “no,” not at finding positives.
+* Points with **high correct_acceptance_rate but modest valid_detection_rate** indicate the model is catching many positives but also making more mistakes elsewhere.
+* This is a good “business-friendly” view when explaining model performance to non-ML stakeholders.
+
+***
+
+### Plot 3 — Detection vs Acceptance Trade-Off
+
+Uses:
+
+* `true_positive_rate`
+* `correct_acceptance_rate`
+
+```sql
+SELECT 
+    time_bucket_gapfill(
+        '1 day',
+        timestamp,
+        '{{dateStart}}'::timestamptz,
+        '{{dateEnd}}'::timestamptz
+    ) AS time_bucket_1d,
+    
+    metric_name,
+    
+    CASE 
+        WHEN metric_name = 'true_positive_rate'      THEN 'True Positive Rate (Recall)'
+        WHEN metric_name = 'correct_acceptance_rate' THEN 'Correct Acceptance Rate'
+        ELSE metric_name
+    END AS friendly_name,
+    
+    COALESCE(AVG(value), 0) AS metric_value
+
+FROM metrics_numeric_latest_version
+WHERE metric_name IN (
+    'true_positive_rate',
+    'correct_acceptance_rate'
+)
+[[AND timestamp BETWEEN '{{dateStart}}' AND '{{dateEnd}}']]
+
+GROUP BY time_bucket_1d, metric_name
+ORDER BY time_bucket_1d, metric_name;
+```
+
+**What this shows**  
+This plot is a **trade-off curve** between **recall** (`true_positive_rate`) and **how much correctly-accepted positive volume you get** (`correct_acceptance_rate`) as you move the threshold.
+
+**How to interpret it**
+
+* Moving along the curve corresponds to adjusting the threshold.
+* Regions where **small increases in acceptance yield big gains in recall** are often attractive operating points.
+* If the curve is very flat, the model may lack discriminative power in the relevant region, and you may need feature or model improvements rather than threshold tweaks.
+
+## Binary vs Multiclass
+
+* **Binary:** use the natural positive class and its probability as `score`.
+* **Multiclass:** for each class `c` of interest:
+  * Define `label = 1` when the ground truth label is `c`, else 0.
+  * Use the model’s predicted probability for class `c` as `score`.
+  * Compute a Detection & Acceptance profile per class.
+
+
+
+## Alternative SQL Example
+
+```sql
+WITH counts AS (
+  SELECT
+    time_bucket(INTERVAL '1 day', {{timestamp_col}}) AS bucket,
+    SUM(
+      CASE WHEN {{ground_truth}} = 1 AND {{prediction}} >= {{threshold}} THEN 1 ELSE 0 END
+    )::float AS tp,
+    SUM(
+      CASE WHEN {{ground_truth}} = 0 AND {{prediction}} >= {{threshold}} THEN 1 ELSE 0 END
+    )::float AS fp,
+    SUM(
+      CASE WHEN {{ground_truth}} = 0 AND {{prediction}} < {{threshold}} THEN 1 ELSE 0 END
+    )::float AS tn,
+    SUM(
+      CASE WHEN {{ground_truth}} = 1 AND {{prediction}} < {{threshold}} THEN 1 ELSE 0 END
+    )::float AS fn
+  FROM
+    {{dataset}}
+  GROUP BY
+    1
+),
+prepared AS (
+  SELECT
+    bucket,
+    tp,
+    fp,
+    tn,
+    fn,
+    (tp + tn + fp + fn) AS total,
+    (tp + fn)           AS pos_total,   -- actual positives (Recall/TPR denominator)
+    (tn + fp)           AS neg_total,   -- actual negatives (Specificity denominator)
+    (tp + fp)           AS prec_total   -- predicted positives (Precision denominator)
+  FROM
+    counts
+)
+SELECT
+  bucket as bucket,
+
+  -- Capture Rate: proportion of actual positives correctly identified
+  CASE
+    WHEN pos_total > 0 THEN tp / pos_total
+    ELSE 0
+  END AS capture_rate,
+
+  -- Correct Detection Rate: correctly detected cases out of all cases
+  CASE
+    WHEN total > 0 THEN tp / total
+    ELSE 0
+  END AS correct_detection_rate,
+
+  -- True Positive Rate (Recall): actual positives correctly classified as positives
+  CASE
+    WHEN pos_total > 0 THEN tp / pos_total
+    ELSE 0
+  END AS true_positive_rate,
+
+  -- True Detection Rate: proportion of actual positives correctly identified
+  CASE
+    WHEN pos_total > 0 THEN tp / pos_total
+    ELSE 0
+  END AS true_detection_rate,
+
+  -- Precision: true positives among all predicted positives
+  CASE
+    WHEN prec_total > 0 THEN tp / prec_total
+    ELSE 0
+  END AS precision,
+
+  -- Correct Acceptance Rate: correctly accepted cases out of all cases
+  CASE
+    WHEN total > 0 THEN tn / total
+    ELSE 0
+  END AS correct_acceptance_rate,
+
+  -- Valid Detection Rate: valid cases correctly detected (accuracy)
+  CASE
+    WHEN total > 0 THEN (tp + tn) / total
+    ELSE 0
+  END AS valid_detection_rate
+
+FROM
+  prepared
+ORDER BY
+  bucket;
+
+```
