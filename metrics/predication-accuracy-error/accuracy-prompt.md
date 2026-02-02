@@ -2,6 +2,8 @@ Prompt: Create a customm model evaluation metric documentation called `accuracy.
 
 Metric name: Accuracy
 
+Metric type: Model Performance - Prediction Accuracy & Error
+
 Metric description: The proportion of correct predictions (true positives and true negatives) among all predictions.
 
 How to create an Arthur Platform custom metric: See `/resources/how-to-create-a-custom-metric.md` and `/resources/overview-metrics-and-querying.md`. Additional guideline can be found in `/resources/configuration-options.md`.
