@@ -12,50 +12,45 @@ This is useful when you want a **simple, threshold-specific impurity measure** t
 
 ## Step 1: Write the SQL
 
-This SQL:
-
-* Buckets rows into 1-day windows
-* Splits predictions using a configurable `thresholdValue`
-* Computes a Gini-style impurity based on the proportion above vs below that threshold
+This SQL computes Gini impurity at a fixed threshold. It measures how "mixed" the predictions are around that threshold - lower values indicate purer separation.
 
 ```sql
+WITH counts AS (
+  SELECT
+    time_bucket(INTERVAL '1 day', {{timestampColumnName}}) AS ts,
+    SUM(
+      CASE
+        WHEN {{predictionColumnName}} >= {{thresholdValue}} THEN 1
+        ELSE 0
+      END
+    )::float AS pos_count,
+    COUNT(*)::float AS total_count
+  FROM
+    {{dataset}}
+  GROUP BY
+    1
+)
 SELECT
-  time_bucket (INTERVAL '1 day', {{timestampColumnName}}) AS ts,
-  1 - (
-    POWER(
-      SUM(
-        CASE
-          WHEN {{predictionColumnName}} >= {{thresholdValue}} THEN 1
-          ELSE 0
-        END
-      ) * 1.0 / COUNT(*),
-      2
-    ) + POWER(
-      SUM(
-        CASE
-          WHEN {{predictionColumnName}} < {{thresholdValue}} THEN 1
-          ELSE 0
-        END
-      ) * 1.0 / COUNT(*),
-      2
-    )
-  ) AS gini_coefficient
+  ts,
+  CASE
+    WHEN total_count > 0 THEN
+      1
+      - (
+          POWER(pos_count / total_count, 2)
+          + POWER((total_count - pos_count) / total_count, 2)
+        )
+    ELSE 0
+  END AS gini_coefficient
 FROM
-  {{dataset}}
-GROUP BY
-  ts
+  counts
 ORDER BY
   ts;
 ```
 
-**What this query is doing**
+**What this query returns**
 
-* `time_bucket('1 day', {{timestampColumnName}})` groups events into daily time buckets and exposes the result as `ts`.
-* The two `SUM(CASE ...)` blocks count:
-  * Rows with `{{predictionColumnName}} >= {{thresholdValue}}`
-  * Rows with `{{predictionColumnName}} < {{thresholdValue}}`
-* Each count is divided by `COUNT(*)` to get a **proportion**.
-* The expression `1 - (p_high² + p_low²)` is the **Gini impurity** of this two-group split, returned as `gini_coefficient`.
+* `ts` — timestamp bucket (1 day)
+* `gini_coefficient` — Gini impurity at the specified threshold (0 = pure, higher = more mixed)
 
 ***
 
@@ -170,40 +165,3 @@ You can:
 >
 > for startDate use 2025-11-26T17:54:05.425Z
 > for endDate use 2025-12-10T17:54:05.425Z
-
-
-
-### Alternative SQL
-
-```sql
-WITH counts AS (
-  SELECT
-    time_bucket(INTERVAL '1 day', {{timestampColumnName}}) AS ts,
-    SUM(
-      CASE
-        WHEN {{predictionColumnName}} >= {{thresholdValue}} THEN 1
-        ELSE 0
-      END
-    )::float AS pos_count,
-    COUNT(*)::float AS total_count
-  FROM
-    {{dataset}}
-  GROUP BY
-    1
-)
-SELECT
-  ts,
-  CASE
-    WHEN total_count > 0 THEN
-      1
-      - (
-          POWER(pos_count / total_count, 2)
-          + POWER((total_count - pos_count) / total_count, 2)
-        )
-    ELSE 0
-  END AS gini_coefficient
-FROM
-  counts
-ORDER BY
-  ts;
-```
