@@ -3,6 +3,7 @@ Prompt: Create a customm model evaluation metric documentation called `absolute-
 Metric name: Absolute Error
 
 Metric description: The absolute difference between a predicted value and the actual value. Do not confuse this with Mean Absolute Error.
+
 How to create an Arthur Platform custom metric: See `/resources/how-to-create-a-custom-metric.md` and `/resources/overview-metrics-and-querying.md`.
 
 Example documentation: See the files in the `/examples` folder.
