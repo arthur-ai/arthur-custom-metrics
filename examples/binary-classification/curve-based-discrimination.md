@@ -47,108 +47,169 @@ The **threshold value** `t*` at which `ks_statistic` is attained. This is often 
 * `{{score_col}}` – probability or score for the positive class (continuous)
 * `{{timestamp_col}}` – event timestamp
 
-## Base Metric SQL — ROC Components
+## Base Metric SQL
+
+This SQL computes AUC-ROC, KS statistic, and KS score for binary classification. It builds a ROC curve by computing confusion matrix values at each threshold, then derives the discrimination metrics.
 
 ```sql
-WITH base AS (
-    SELECT
-        {{timestamp_col}} AS event_ts,
-        {{label_col}}    AS label,
-        {{score_col}}    AS score
-    FROM {{dataset}}
+WITH scored AS (
+  SELECT
+    time_bucket(INTERVAL '1 day', {{timestamp_col}}) AS bucket,
+    {{ground_truth}} AS label,
+    {{score_col}}     AS score
+  FROM
+    {{dataset}}
 ),
-grid AS (
-    SELECT generate_series(0.0, 1.0, 0.01) AS threshold
+
+-- Total positives / negatives per bucket
+bucket_totals AS (
+  SELECT
+    bucket,
+    SUM(CASE WHEN label = 1 THEN 1 ELSE 0 END)::float AS num_pos,
+    SUM(CASE WHEN label = 0 THEN 1 ELSE 0 END)::float AS num_neg
+  FROM
+    scored
+  GROUP BY
+    bucket
 ),
-scored AS (
-    SELECT
-        time_bucket(INTERVAL '5 minutes', event_ts) AS ts,
-        g.threshold,
-        label,
-        score,
-        CASE WHEN score >= g.threshold THEN 1 ELSE 0 END AS pred_pos
-    FROM base
-    CROSS JOIN grid g
-)
-SELECT
-    ts     																											AS ts,
-    threshold																										AS threshold,
-    SUM(CASE WHEN label = 1 THEN 1 ELSE 0 END)                  AS actual_pos,
-    SUM(CASE WHEN label = 0 THEN 1 ELSE 0 END)                  AS actual_neg,
-    SUM(CASE WHEN pred_pos = 1 AND label = 1 THEN 1 ELSE 0 END) AS tp,
-    SUM(CASE WHEN pred_pos = 1 AND label = 0 THEN 1 ELSE 0 END) AS fp
-FROM scored
-GROUP BY ts, threshold
-ORDER BY ts, threshold;
-```
 
-You can materialize this as `{{bucket_5_curve_metrics_daily}}`.
+-- Cumulative TP / FP as we sweep thresholds from high score to low score
+roc_raw AS (
+  SELECT
+    s.bucket,
+    s.score,
+    SUM(CASE WHEN s.label = 1 THEN 1 ELSE 0 END)
+      OVER (
+        PARTITION BY s.bucket
+        ORDER BY s.score DESC
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+      )::float AS cum_pos,
+    SUM(CASE WHEN s.label = 0 THEN 1 ELSE 0 END)
+      OVER (
+        PARTITION BY s.bucket
+        ORDER BY s.score DESC
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+      )::float AS cum_neg
+  FROM
+    scored s
+),
 
-## Computing AUC-ROC, Gini, and KS
+-- Turn cumulative counts into TPR/FPR points
+roc_points AS (
+  SELECT DISTINCT
+    r.bucket,
+    r.score AS threshold,
+    CASE WHEN bt.num_pos > 0 THEN r.cum_pos / bt.num_pos ELSE 0 END AS tpr,
+    CASE WHEN bt.num_neg > 0 THEN r.cum_neg / bt.num_neg ELSE 0 END AS fpr
+  FROM
+    roc_raw r
+    JOIN bucket_totals bt USING (bucket)
+),
 
-### AUC-ROC (Binary Only)
+-- Add (0,0) and (1,1) endpoints for a closed ROC curve
+roc_with_endpoints AS (
+  -- (0,0) per bucket
+  SELECT
+    bt.bucket,
+    0.0::float AS fpr,
+    0.0::float AS tpr
+  FROM
+    bucket_totals bt
 
-```sql
-WITH roc_points AS (
-    SELECT
-        day,
-        threshold,
-        tpr,
-        fpr,
-        LAG(fpr) OVER (PARTITION BY day ORDER BY fpr) AS prev_fpr,
-        LAG(tpr) OVER (PARTITION BY day ORDER BY fpr) AS prev_tpr
-    FROM {{bucket_5_curve_metrics_daily}}
-)
-SELECT
-    day,
-    SUM(
-        COALESCE((fpr - prev_fpr) * (tpr + prev_tpr) / 2.0, 0.0)
+  UNION ALL
+
+  -- All ROC points
+  SELECT
+    bucket,
+    fpr,
+    tpr
+  FROM
+    roc_points
+
+  UNION ALL
+
+  -- (1,1) per bucket
+  SELECT
+    bt.bucket,
+    1.0::float AS fpr,
+    1.0::float AS tpr
+  FROM
+    bucket_totals bt
+),
+
+-- Order ROC points and keep previous point for trapezoids
+roc_ordered AS (
+  SELECT
+    bucket,
+    fpr,
+    tpr,
+    LAG(fpr) OVER (PARTITION BY bucket ORDER BY fpr, tpr) AS prev_fpr,
+    LAG(tpr) OVER (PARTITION BY bucket ORDER BY fpr, tpr) AS prev_tpr
+  FROM
+    roc_with_endpoints
+),
+
+-- Area Under the Curve (AUC) via trapezoidal rule
+auc_per_bucket AS (
+  SELECT
+    bucket,
+    COALESCE(
+      SUM(
+        CASE
+          WHEN prev_fpr IS NULL THEN 0
+          ELSE (fpr - prev_fpr) * (tpr + prev_tpr) / 2.0
+        END
+      ),
+      0
     ) AS auc_roc
-FROM roc_points
-GROUP BY day;
-```
-
-### Gini Coefficient
-
-```sql
-SELECT
-    day,
-    auc_roc,
-    2 * auc_roc - 1 AS gini_coefficient
-FROM {{bucket_5_auc_metrics}};
-```
-
-### KS Statistic and Score
-
-```sql
-WITH roc_points AS (
-    SELECT
-        day,
-        threshold,
-        tpr,
-        fpr
-    FROM {{bucket_5_curve_metrics_daily}}
+  FROM
+    roc_ordered
+  GROUP BY
+    bucket
 ),
-cum AS (
-    SELECT
-        day,
-        threshold,
-        SUM(tpr) OVER (PARTITION BY day ORDER BY threshold DESC) AS cum_tpr,
-        SUM(fpr) OVER (PARTITION BY day ORDER BY threshold DESC) AS cum_fpr
-    FROM roc_points
+
+-- Kolmogorov-Smirnov Statistic: max |TPR - FPR|
+ks_per_bucket AS (
+  SELECT
+    bucket,
+    MAX(ABS(tpr - fpr)) AS ks_statistic
+  FROM
+    roc_with_endpoints
+  GROUP BY
+    bucket
 )
+
 SELECT
-    day,
-    MAX(ABS(cum_tpr - cum_fpr)) AS ks_statistic,
-    FIRST_VALUE(threshold) OVER (
-        PARTITION BY day
-        ORDER BY ABS(cum_tpr - cum_fpr) DESC
-    ) AS ks_score
-FROM cum
-GROUP BY day;
+  a.bucket           AS bucket,
+  a.auc_roc          AS auc_roc,
+  2 * a.auc_roc - 1  AS gini_coefficient,
+  k.ks_statistic     AS ks_statistic,
+  k.ks_statistic     AS ks_score
+FROM
+  auc_per_bucket a
+  JOIN ks_per_bucket k USING (bucket)
+ORDER BY
+  a.bucket;
 ```
+
+**What this query returns**
+
+* `bucket` — timestamp bucket (1 day)
+* `auc_roc` — Area under the ROC curve
+* `gini_coefficient` — 2 × AUC - 1
+* `ks_statistic` — Maximum separation between positive and negative distributions
+* `ks_score` — Same as ks_statistic (threshold at which KS is maximized)
 
 ## Plots
+
+See the [charts](../charts/binary-classification/) folder for visualization examples:
+
+* [Plot 1: AUC + Gini Over Time](../charts/binary-classification/auc-gini-over-time.md)
+* [Plot 2: KS Statistic Over Time](../charts/binary-classification/ks-statistic-over-time.md)
+* [Plot 3: Combined AUC + KS](../charts/binary-classification/combined-auc-ks.md)
+* [Plot 4: KS-Only Variant](../charts/binary-classification/ks-only.md)
+
+---
 
 ### Plot 1— AUC + Gini Over Time
 
@@ -340,148 +401,3 @@ A lightweight KS-only time series focusing on **separation strength**.
 
 * Useful when you want a single scalar to monitor drift in discrimination.
 * Can be wired into simple guardrails (e.g., “alert if KS falls below 0.25”).
-
-
-
-### Alternative SQL
-
-```sql
-WITH scored AS (
-  SELECT
-    time_bucket(INTERVAL '1 day', {{timestamp_col}}) AS bucket,
-    {{ground_truth}} AS label,
-    {{score_col}}     AS score
-  FROM
-    {{dataset}}
-),
-
--- Total positives / negatives per bucket
-bucket_totals AS (
-  SELECT
-    bucket,
-    SUM(CASE WHEN label = 1 THEN 1 ELSE 0 END)::float AS num_pos,
-    SUM(CASE WHEN label = 0 THEN 1 ELSE 0 END)::float AS num_neg
-  FROM
-    scored
-  GROUP BY
-    bucket
-),
-
--- Cumulative TP / FP as we sweep thresholds from high score to low score
-roc_raw AS (
-  SELECT
-    s.bucket,
-    s.score,
-    SUM(CASE WHEN s.label = 1 THEN 1 ELSE 0 END)
-      OVER (
-        PARTITION BY s.bucket
-        ORDER BY s.score DESC
-        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-      )::float AS cum_pos,
-    SUM(CASE WHEN s.label = 0 THEN 1 ELSE 0 END)
-      OVER (
-        PARTITION BY s.bucket
-        ORDER BY s.score DESC
-        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-      )::float AS cum_neg
-  FROM
-    scored s
-),
-
--- Turn cumulative counts into TPR/FPR points
-roc_points AS (
-  SELECT DISTINCT
-    r.bucket,
-    r.score AS threshold,
-    CASE WHEN bt.num_pos > 0 THEN r.cum_pos / bt.num_pos ELSE 0 END AS tpr,
-    CASE WHEN bt.num_neg > 0 THEN r.cum_neg / bt.num_neg ELSE 0 END AS fpr
-  FROM
-    roc_raw r
-    JOIN bucket_totals bt USING (bucket)
-),
-
--- Add (0,0) and (1,1) endpoints for a closed ROC curve
-roc_with_endpoints AS (
-  -- (0,0) per bucket
-  SELECT
-    bt.bucket,
-    0.0::float AS fpr,
-    0.0::float AS tpr
-  FROM
-    bucket_totals bt
-
-  UNION ALL
-
-  -- All ROC points
-  SELECT
-    bucket,
-    fpr,
-    tpr
-  FROM
-    roc_points
-
-  UNION ALL
-
-  -- (1,1) per bucket
-  SELECT
-    bt.bucket,
-    1.0::float AS fpr,
-    1.0::float AS tpr
-  FROM
-    bucket_totals bt
-),
-
--- Order ROC points and keep previous point for trapezoids
-roc_ordered AS (
-  SELECT
-    bucket,
-    fpr,
-    tpr,
-    LAG(fpr) OVER (PARTITION BY bucket ORDER BY fpr, tpr) AS prev_fpr,
-    LAG(tpr) OVER (PARTITION BY bucket ORDER BY fpr, tpr) AS prev_tpr
-  FROM
-    roc_with_endpoints
-),
-
--- Area Under the Curve (AUC) via trapezoidal rule
-auc_per_bucket AS (
-  SELECT
-    bucket,
-    COALESCE(
-      SUM(
-        CASE
-          WHEN prev_fpr IS NULL THEN 0
-          ELSE (fpr - prev_fpr) * (tpr + prev_tpr) / 2.0
-        END
-      ),
-      0
-    ) AS area_under_curve  -- AUC: ability to distinguish between classes
-  FROM
-    roc_ordered
-  GROUP BY
-    bucket
-),
-
--- Kolmogorov-Smirnov Statistic: max |TPR - FPR|
-ks_per_bucket AS (
-  SELECT
-    bucket,
-    MAX(ABS(tpr - fpr)) AS kolmogorov_smirnov_statistic
-  FROM
-    roc_with_endpoints
-  GROUP BY
-    bucket
-)
-
-SELECT
-  a.bucket                                   AS bucket,
-  a.area_under_curve                         AS auc_roc,
-  k.kolmogorov_smirnov_statistic             AS ks_statistic,
-  k.kolmogorov_smirnov_statistic             AS ks_score
-FROM
-  auc_per_bucket a
-  JOIN ks_per_bucket k USING (bucket)
-ORDER BY
-  a.bucket;
-
-```

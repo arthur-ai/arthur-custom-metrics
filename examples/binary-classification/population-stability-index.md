@@ -38,144 +38,133 @@ This is ideal when you want a **stable baseline** for regulatory/compliance or l
 
 ### Step 1: Write the SQL
 
-This SQL assumes:
-
-* `{{reference_dataset}}` — baseline dataset/table (e.g., training)
-* `{{dataset}}` — current/live dataset
-* `{{timestamp_col}}` — timestamp column on the _current_ dataset
-* `{{feature_col}}` — numeric feature to monitor
-* `{{num_bins}}` — number of bins (e.g., 10 or 20)
+This SQL computes Population Stability Index comparing current data against a fixed reference dataset. It bins numeric features and measures distribution shift.
 
 ```sql
-SELECT
-  bucket,
-  SUM((p_cur - p_ref) * LN(p_cur / p_ref)) AS psi_against_reference
-FROM
-  (
-    ----------------------------------------------------------------------------
-    -- 0) Compute ref_min and ref_max ONCE and reuse them everywhere
-    ----------------------------------------------------------------------------
+WITH
+  ref_range AS (
+    -- Global min/max of the feature, used for binning both reference and current
+    SELECT
+      MIN({{feature_col}})::float AS ref_min,
+      MAX({{feature_col}})::float AS ref_max
+    FROM
+      {{reference_dataset}}
+  ),
+  -- Reference distribution (global)
+  ref_bins AS (
+    SELECT
+      CASE
+        WHEN rr.ref_max = rr.ref_min THEN 1
+        ELSE LEAST(
+          {{num_bins}},
+          GREATEST(
+            1,
+            CAST(
+              FLOOR(
+                ({{feature_col}} - rr.ref_min) / NULLIF(rr.ref_max - rr.ref_min, 0) * {{num_bins}}
+              ) AS integer
+            ) + 1
+          )
+        )
+      END AS bin_id,
+      COUNT(*)::float AS ref_count
+    FROM
+      {{reference_dataset}} r
+      CROSS JOIN ref_range rr
+    GROUP BY
+      bin_id
+  ),
+  ref_totals AS (
+    SELECT
+      SUM(ref_count) AS total_ref_count
+    FROM
+      ref_bins
+  ),
+  ref_dist AS (
+    SELECT
+      rb.bin_id,
+      rb.ref_count / NULLIF(rt.total_ref_count, 0) AS p_ref_raw
+    FROM
+      ref_bins rb
+      CROSS JOIN ref_totals rt
+  ),
+  -- Current distribution per 1 day bucket
+  cur_bins AS (
+    SELECT
+      time_bucket (INTERVAL '1 day', d.{{timestamp_col}}) AS bucket,
+      CASE
+        WHEN rr.ref_max = rr.ref_min THEN 1
+        ELSE LEAST(
+          {{num_bins}},
+          GREATEST(
+            1,
+            CAST(
+              FLOOR(
+                ({{feature_col}} - rr.ref_min) / NULLIF(rr.ref_max - rr.ref_min, 0) * {{num_bins}}
+              ) AS integer
+            ) + 1
+          )
+        )
+      END AS bin_id,
+      COUNT(*)::float AS cur_count
+    FROM
+      {{dataset}} d
+      CROSS JOIN ref_range rr
+    GROUP BY
+      bucket,
+      bin_id
+  ),
+  cur_totals AS (
     SELECT
       bucket,
-      bin_id,
-      -- sanitized proportions
-      GREATEST(p_cur_raw, 1e-6) AS p_cur,
-      GREATEST(p_ref_raw, 1e-6) AS p_ref
+      SUM(cur_count) AS total_cur_count
     FROM
-      (
-        ----------------------------------------------------------------------------
-        -- Join reference + current distributions
-        ----------------------------------------------------------------------------
-        SELECT
-          c.bucket,
-          c.bin_id,
-          COALESCE(c.p_cur, 0) AS p_cur_raw,
-          COALESCE(r.p_ref, 0) AS p_ref_raw
-        FROM
-          (
-            ----------------------------------------------------------------------------
-            -- Current distribution (per 5-minute bucket)
-            ----------------------------------------------------------------------------
-            SELECT
-              bucket,
-              bin_id,
-              cur_count / NULLIF(
-                SUM(cur_count) OVER (
-                  PARTITION BY
-                    bucket
-                ),
-                0
-              ) AS p_cur
-            FROM
-              (
-                SELECT
-                  time_bucket (INTERVAL '5 minutes', d.{{timestamp_col}}) AS bucket,
-                  CASE
-                    WHEN ref_max = ref_min THEN 1
-                    ELSE LEAST(
-                      {{num_bins}},
-                      GREATEST(
-                        1,
-                        CAST(
-                          FLOOR(
-                            ({{feature_col}} - ref_min) / NULLIF(ref_max - ref_min, 0) * {{num_bins}}
-                          ) AS INTEGER
-                        ) + 1
-                      )
-                    )
-                  END AS bin_id,
-                  COUNT(*)::float AS cur_count
-                FROM
-                  {{dataset}} AS d,
-                  (
-                    SELECT
-                      MIN({{feature_col}})::float AS ref_min,
-                      MAX({{feature_col}})::float AS ref_max
-                    FROM
-                      {{reference_dataset}}
-                  ) AS rs
-                GROUP BY
-                  bucket,
-                  bin_id,
-                  ref_min,
-                  ref_max
-              ) cur_raw
-          ) c
-          LEFT JOIN (
-            ----------------------------------------------------------------------------
-            -- Reference distribution (global)
-            ----------------------------------------------------------------------------
-            SELECT
-              bin_id,
-              ref_count / NULLIF(SUM(ref_count) OVER (), 0) AS p_ref
-            FROM
-              (
-                SELECT
-                  CASE
-                    WHEN ref_max = ref_min THEN 1
-                    ELSE LEAST(
-                      {{num_bins}},
-                      GREATEST(
-                        1,
-                        CAST(
-                          FLOOR(
-                            ({{feature_col}} - ref_min) / NULLIF(ref_max - ref_min, 0) * {{num_bins}}
-                          ) AS INTEGER
-                        ) + 1
-                      )
-                    )
-                  END AS bin_id,
-                  COUNT(*)::float AS ref_count
-                FROM
-                  {{reference_dataset}} r,
-                  (
-                    SELECT
-                      MIN({{feature_col}})::float AS ref_min,
-                      MAX({{feature_col}})::float AS ref_max
-                    FROM
-                      {{reference_dataset}}
-                  ) AS rs
-                GROUP BY
-                  bin_id,
-                  ref_min,
-                  ref_max
-              ) ref_bins
-          ) r USING (bin_id)
-      ) psi_terms
-  ) psi_final
+      cur_bins
+    GROUP BY
+      bucket
+  ),
+  cur_dist AS (
+    SELECT
+      cb.bucket,
+      cb.bin_id,
+      cb.cur_count / NULLIF(ct.total_cur_count, 0) AS p_cur_raw
+    FROM
+      cur_bins cb
+      JOIN cur_totals ct ON cb.bucket = ct.bucket
+  ),
+  -- Join current + reference, apply smoothing
+  psi_input AS (
+    SELECT
+      c.bucket,
+      c.bin_id,
+      GREATEST(COALESCE(c.p_cur_raw, 0), 1e-6) AS p_cur,
+      GREATEST(COALESCE(r.p_ref_raw, 0), 1e-6) AS p_ref
+    FROM
+      cur_dist c
+      LEFT JOIN ref_dist r ON c.bin_id = r.bin_id
+  ),
+  psi_terms AS (
+    SELECT
+      bucket,
+      (p_cur - p_ref) * LN(p_cur / p_ref) AS term
+    FROM
+      psi_input
+  )
+SELECT
+  bucket AS bucket,
+  SUM(term) AS psi_against_reference
+FROM
+  psi_terms
 GROUP BY
   bucket
 ORDER BY
   bucket;
 ```
 
-**What this query is doing**
+**What this query returns**
 
-1. `ref_stats` — compute `ref_min` and `ref_max` from the reference dataset to define bin edges.
-2. `ref_bins` / `ref_dist` — compute reference bin counts and convert to proportions `p_ref`.
-3. `cur_bins` / `cur_dist` — compute current bin counts per 5-minute bucket and convert to `p_cur`.
-4. `psi_terms` / `psi_sanitized` — join the two distributions and enforce a small epsilon to avoid `log(0)` and division by zero.
-5. Final `SELECT` — aggregates PSI per `bucket` as `psi_against_reference`.
+* `bucket` — timestamp bucket (1 day)
+* `psi_against_reference` — Population Stability Index comparing current distribution to reference dataset
 
 ***
 
@@ -550,126 +539,3 @@ Used together, they let you answer both:
 >
 > for startDate use 2025-11-26T17:54:05.425Z
 > for endDate use 2025-12-10T17:54:05.425Z
-
-### Alternative SQL
-
-```sql
-WITH
-  ref_range AS (
-    -- Global min/max of the feature, used for binning both reference and current
-    SELECT
-      MIN({{feature_col}})::float AS ref_min,
-      MAX({{feature_col}})::float AS ref_max
-    FROM
-      {{reference_dataset}}
-  ),
-  -- Reference distribution (global)
-  ref_bins AS (
-    SELECT
-      CASE
-        WHEN rr.ref_max = rr.ref_min THEN 1
-        ELSE LEAST(
-          {{num_bins}},
-          GREATEST(
-            1,
-            CAST(
-              FLOOR(
-                ({{feature_col}} - rr.ref_min) / NULLIF(rr.ref_max - rr.ref_min, 0) * {{num_bins}}
-              ) AS integer
-            ) + 1
-          )
-        )
-      END AS bin_id,
-      COUNT(*)::float AS ref_count
-    FROM
-      {{reference_dataset}} r
-      CROSS JOIN ref_range rr
-    GROUP BY
-      bin_id
-  ),
-  ref_totals AS (
-    SELECT
-      SUM(ref_count) AS total_ref_count
-    FROM
-      ref_bins
-  ),
-  ref_dist AS (
-    SELECT
-      rb.bin_id,
-      rb.ref_count / NULLIF(rt.total_ref_count, 0) AS p_ref_raw
-    FROM
-      ref_bins rb
-      CROSS JOIN ref_totals rt
-  ),
-  -- Current distribution per 1 day bucket
-  cur_bins AS (
-    SELECT
-      time_bucket (INTERVAL '1 day', d.{{timestamp_col}}) AS bucket,
-      CASE
-        WHEN rr.ref_max = rr.ref_min THEN 1
-        ELSE LEAST(
-          {{num_bins}},
-          GREATEST(
-            1,
-            CAST(
-              FLOOR(
-                ({{feature_col}} - rr.ref_min) / NULLIF(rr.ref_max - rr.ref_min, 0) * {{num_bins}}
-              ) AS integer
-            ) + 1
-          )
-        )
-      END AS bin_id,
-      COUNT(*)::float AS cur_count
-    FROM
-      {{dataset}} d
-      CROSS JOIN ref_range rr
-    GROUP BY
-      bucket,
-      bin_id
-  ),
-  cur_totals AS (
-    SELECT
-      bucket,
-      SUM(cur_count) AS total_cur_count
-    FROM
-      cur_bins
-    GROUP BY
-      bucket
-  ),
-  cur_dist AS (
-    SELECT
-      cb.bucket,
-      cb.bin_id,
-      cb.cur_count / NULLIF(ct.total_cur_count, 0) AS p_cur_raw
-    FROM
-      cur_bins cb
-      JOIN cur_totals ct ON cb.bucket = ct.bucket
-  ),
-  -- Join current + reference, apply smoothing
-  psi_input AS (
-    SELECT
-      c.bucket,
-      c.bin_id,
-      GREATEST(COALESCE(c.p_cur_raw, 0), 1e-6) AS p_cur,
-      GREATEST(COALESCE(r.p_ref_raw, 0), 1e-6) AS p_ref
-    FROM
-      cur_dist c
-      LEFT JOIN ref_dist r ON c.bin_id = r.bin_id
-  ),
-  psi_terms AS (
-    SELECT
-      bucket,
-      (p_cur - p_ref) * LN(p_cur / p_ref) AS term
-    FROM
-      psi_input
-  )
-SELECT
-  bucket AS bucket,
-  SUM(term) AS psi_against_reference
-FROM
-  psi_terms
-GROUP BY
-  bucket
-ORDER BY
-  bucket;
-```
