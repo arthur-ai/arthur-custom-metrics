@@ -350,7 +350,7 @@ def gen_marketing_aggregations(dataset: Dataset) -> list[AggregationSpec]:
 
 ```python
 # In add-custom-aggregations.py
-ARTHUR_HOST = "https://scope.jpmc.arthur.ai"
+ARTHUR_HOST = "https://platform.arthur.ai"
 MODEL_ID = "your-model-id-here"
 ```
 
@@ -380,9 +380,9 @@ python add-custom-aggregations.py
 
 Output:
 ```
-Connecting to Arthur at https://scope.jpmc.arthur.ai...
+Connecting to Arthur at https://platform.arthur.ai...
 Fetching model abc123...
-Model: jpmc-fraud-model
+Model: fraud-model
 Current aggregation count: 5
 
 Fetching dataset...
@@ -605,5 +605,5 @@ If metrics don't appear or show errors, verify you're using the correct aggregat
 
 - [add-custom-aggregations.py](add-custom-aggregations.py) - General template for adding custom aggregations
 - [add-fraud-model-aggregations.py](add-fraud-model-aggregations.py) - Fraud-specific aggregations with error profile
-- [jpmc-onboarding.py](jpmc-onboarding.py) - Initial model setup
+- [model-onboarding.py](model-onboarding.py) - Initial model setup
 - [README.md](README.md) - Complete onboarding guide

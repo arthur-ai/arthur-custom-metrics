@@ -1,5 +1,5 @@
 """
-Add standard aggregations for JPMC Card Fraud Model.
+Add standard aggregations for Card Fraud Model.
 
 This script adds standard built-in aggregations for the card fraud detection use case.
 
