@@ -1,8 +1,8 @@
 """
-JPMC Model Onboarding Script
+Model Onboarding Script
 
 PURPOSE: Complete end-to-end onboarding of a new model from S3 to Arthur platform
-USAGE: python jpmc-onboarding.py
+USAGE: python model-onboarding.py
 WHEN: First-time setup, new S3 data source, initial project configuration
 
 CREATES:
@@ -79,13 +79,13 @@ ARTHUR_PROJECT_ID = "INSERT_ARTHUR_PROJECT_ID_HERE"  # Get from Arthur UI
 DATA_PLANE_ID = "INSERT_DATA_PLANE_ID_HERE"  # Get from Arthur UI (or leave as-is to auto-detect)
 
 # Model Configuration
-JPMC_CONNECTOR_NAME = f"{S3_BUCKET}"
-JPMC_MODEL_NAME = "INSERT_MODEL_NAME_HERE"
-JPMC_MODEL_DESCRIPTION = "INSERT_MODEL_DESCRIPTION_HERE"
+CONNECTOR_NAME = f"{S3_BUCKET}"
+MODEL_NAME = "INSERT_MODEL_NAME_HERE"
+MODEL_DESCRIPTION = "INSERT_MODEL_DESCRIPTION_HERE"
 
 # CONFIGURE THE DATASET LOCATOR AND METRICS CONFIGS FOR MODEL
 
-jpmc_dataset_locator = DatasetLocator(
+dataset_locator = DatasetLocator(
     fields=[
         DatasetLocatorField(
             key="file_prefix",
@@ -171,9 +171,9 @@ def gen_aggregation_specs(dataset: Dataset) -> list[AggregationSpec]:
     #             MetricsArgSpec(arg_key="dataset", arg_value=dataset.id),
     #             MetricsArgSpec(arg_key="timestamp_col", arg_value=timestamp_col_id),
     #             MetricsArgSpec(arg_key="prediction_col", arg_value=pred_col_id),
-    #             MetricsArgSpec(arg_key="threshold", arg_value=JPMC_POS_PREDICTION_THRESHOLD),
-    #             MetricsArgSpec(arg_key="true_label", arg_value=JPMC_POS_LABEL),
-    #             MetricsArgSpec(arg_key="false_label", arg_value=JPMC_NEG_LABEL),
+    #             MetricsArgSpec(arg_key="threshold", arg_value=POS_PREDICTION_THRESHOLD),
+    #             MetricsArgSpec(arg_key="true_label", arg_value=POS_LABEL),
+    #             MetricsArgSpec(arg_key="false_label", arg_value=NEG_LABEL),
     #         ],
     #     ),
     # )
@@ -224,7 +224,7 @@ if __name__ == "__main__":
         print(f"If this fails, check Arthur UI for correct data plane and set DATA_PLANE_ID")
 
     # NOTE - this script creates a connector (below) because one did not yet exist for
-    # communicating with the JPMC S3 bucket. In general though,
+    # communicating with the S3 bucket. In general though,
     # connectors can, and should, be reused across models in the same project.
     # i.e. you only need to set up one connector per bucket in the Arthur project.
     # If you have multiple models using data from the same bucket,
@@ -234,22 +234,22 @@ if __name__ == "__main__":
     # The projects were created manually in the UI, then their IDs were hardcoded here to be
     # used across multiple models.
 
-    print(f"Check for S3 connector with name {JPMC_CONNECTOR_NAME}")
+    print(f"Check for S3 connector with name {CONNECTOR_NAME}")
     connectors = connectors_client.get_connectors(
         project_id=project.id,
         connector_type=ConnectorType.S3,
         data_plane_id=data_plane.id,
-        name=JPMC_CONNECTOR_NAME,
+        name=CONNECTOR_NAME,
         page_size=1,
     )
     if len(connectors.records) > 0:
         connector = connectors.records[0]
         print(
-            f"S3 connector found with name {JPMC_CONNECTOR_NAME}, ID {connector.id}"
+            f"S3 connector found with name {CONNECTOR_NAME}, ID {connector.id}"
         )
     else:
         print(
-            f"Connector with name {JPMC_CONNECTOR_NAME} not found, creating a new one"
+            f"Connector with name {CONNECTOR_NAME} not found, creating a new one"
         )
         print(f"Creating S3 connector...")
 
@@ -297,7 +297,7 @@ if __name__ == "__main__":
             connector = connectors_client.post_connector(
                 project_id=ARTHUR_PROJECT_ID,
                 post_connector_spec=PostConnectorSpec(
-                    name=JPMC_CONNECTOR_NAME,
+                    name=CONNECTOR_NAME,
                     connector_type=ConnectorType.S3,
                     temporary=False,
                     data_plane_id=data_plane.id,
@@ -322,8 +322,8 @@ if __name__ == "__main__":
     avail_dataset = datasets_client.post_available_dataset(
         connector_id=connector.id,
         put_available_dataset=PutAvailableDataset(
-            name=JPMC_MODEL_NAME,
-            dataset_locator=jpmc_dataset_locator,
+            name=MODEL_NAME,
+            dataset_locator=dataset_locator,
         ),
     )
     print(f"Created Available Dataset: {avail_dataset.id}")
@@ -387,8 +387,8 @@ if __name__ == "__main__":
     dataset = datasets_client.post_connector_dataset(
         connector_id=connector.id,
         post_dataset=PostDataset(
-            name=JPMC_MODEL_NAME,
-            dataset_locator=jpmc_dataset_locator,
+            name=MODEL_NAME,
+            dataset_locator=dataset_locator,
             dataset_schema=PutDatasetSchema(
                 alias_mask=avail_dataset.dataset_schema.alias_mask,
                 columns=avail_dataset.dataset_schema.columns,
@@ -398,12 +398,12 @@ if __name__ == "__main__":
     )
     print(f"Created dataset: {dataset.id}")
 
-    print(f"Creating model {JPMC_MODEL_NAME}...")
+    print(f"Creating model {MODEL_NAME}...")
     model = models_client.post_model(
         project_id=ARTHUR_PROJECT_ID,
         post_model=PostModel(
-            name=JPMC_MODEL_NAME,
-            description=JPMC_MODEL_DESCRIPTION,
+            name=MODEL_NAME,
+            description=MODEL_DESCRIPTION,
             dataset_ids=[dataset.id],
             metric_config=PutModelMetricSpec(
                 aggregation_specs=gen_aggregation_specs(dataset)

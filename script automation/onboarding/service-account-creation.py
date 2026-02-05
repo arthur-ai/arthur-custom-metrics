@@ -41,7 +41,7 @@ if __name__ == "__main__":
     groups_client = GroupsV1Api(api_client=api_client)
 
     # TODO adjust permissions as necessary, for now we're giving the service account
-    #  Organization Super Admin role and adding them to the JPMC Admin Group
+    #  Organization Super Admin role and adding them to a group
     #  which is likely duplicative since both the group and the role have the same
     #  permissions. This code is meant to be an example only.
 
@@ -53,8 +53,8 @@ if __name__ == "__main__":
     role = roles_resp.records[0]
 
     # find group ID by name for service account to use
-    # TODO: Update this to the actual JPMC group name
-    GROUP_NAME = "JPMC Admin"
+    # TODO: Update this to your actual group name
+    GROUP_NAME = "INSERT_GROUP_NAME_HERE"
     groups = groups_client.get_groups(name=GROUP_NAME, page_size=1)
     group = groups.records[0]
 
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     # to use with the Arthur API
     service_account_user = users_client.post_organization_service_account(
         post_service_account=PostServiceAccount(
-            name="JPMC Service Account",
+            name="Service Account",
         )
     )
 

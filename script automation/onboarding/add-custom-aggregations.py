@@ -1,5 +1,5 @@
 """
-Add Custom Aggregations to Any JPMC Model (General Purpose)
+Add Custom Aggregations to Any Model (General Purpose)
 
 PURPOSE: Add custom metrics to any model - generic template
 USAGE: python add-custom-aggregations.py

@@ -1,6 +1,6 @@
-# JPMC Onboarding Package
+# Model Onboarding Package
 
-Complete set of scripts and documentation for onboarding JPMC models to Arthur platform using AWS S3.
+Complete set of scripts and documentation for onboarding models to Arthur platform using AWS S3.
 
 ## Quick Start
 
@@ -8,10 +8,10 @@ Complete set of scripts and documentation for onboarding JPMC models to Arthur p
 # 1. Install dependencies
 pip install arthur-client
 
-# 2. Configure jpmc-onboarding.py with your AWS and Arthur credentials
+# 2. Configure model-onboarding.py with your AWS and Arthur credentials
 
 # 3. Run onboarding
-python jpmc-onboarding.py
+python model-onboarding.py
 
 # 4. Add fraud-specific metrics (for card fraud models)
 python add-fraud-model-aggregations.py
@@ -20,9 +20,9 @@ python add-fraud-model-aggregations.py
 ## 📁 Package Contents
 
 ### Main Scripts
-- **[jpmc-onboarding.py](jpmc-onboarding.py)** - Complete S3-to-Arthur onboarding (connector, dataset, model, schedule)
-- **[add-fraud-model-aggregations.py](add-fraud-model-aggregations.py)** - 15 fraud-specific metrics including positive-class error profile
-- **[add-custom-aggregations.py](add-custom-aggregations.py)** - Template for adding custom metrics to any model
+- **[model-onboarding.py](model-onboarding.py)** - Complete S3-to-Arthur onboarding (connector, dataset, model, schedule)
+- **[add-fraud-model-aggregations.py](../add-fraud-model-aggregations.py)** - 15 fraud-specific metrics including positive-class error profile
+- **[add-custom-aggregations.py](../add-custom-aggregations.py)** - Template for adding custom metrics to any model
 
 ### Utility Scripts
 - **[service-account-creation.py](service-account-creation.py)** - Create service accounts for automation
@@ -50,7 +50,7 @@ python add-fraud-model-aggregations.py
 
 ## Configuration Guide
 
-### 1. Basic Setup (jpmc-onboarding.py)
+### 1. Basic Setup (model-onboarding.py)
 
 ```python
 # Arthur Configuration
@@ -62,13 +62,13 @@ DATA_PLANE_ID = None  # Optional: Set explicitly if you have multiple data plane
 AWS_ACCESS_KEY_ID = "YOUR_AWS_ACCESS_KEY_ID"
 AWS_SECRET_ACCESS_KEY = "YOUR_AWS_SECRET_ACCESS_KEY"
 AWS_REGION = "us-east-1"
-S3_BUCKET = "jpmc-ml-data"
+S3_BUCKET = "your-ml-data-bucket"
 S3_FILE_PREFIX = "model-inferences/%Y%m%d/"  # Daily partitions
 S3_FILE_SUFFIX = ".*.json"  # Match all .json files
 S3_FILE_TYPE = "json"  # Options: json, parquet, csv
 
 # Model Configuration
-JPMC_MODEL_NAME = "jpmc-fraud-model"
+MODEL_NAME = "your-model-name"
 TIMESTAMP_COLUMN_NAME = "timestamp"
 ```
 
@@ -121,7 +121,7 @@ S3_ENDPOINT = "https://s3.company.internal"
 
 | Field | Required | Description | Example |
 |-------|----------|-------------|---------|
-| `bucket` | ✓ | S3 bucket name | `"jpmc-ml-data"` |
+| `bucket` | ✓ | S3 bucket name | `"your-ml-data-bucket"` |
 | `access_key_id` | * | AWS access key | `"AKIAIOSFODNN7..."` |
 | `secret_access_key` | * | AWS secret | `"wJalrXUtnFEMI..."` |
 | `role_arn` | * | IAM role ARN | `"arn:aws:iam::..."` |
@@ -158,7 +158,7 @@ The `S3_FILE_SUFFIX` is a regex pattern:
 ### Expected S3 Layout
 
 ```
-s3://jpmc-ml-data/
+s3://your-ml-data-bucket/
   model-inferences/
     20240101/
       predictions_000.json
@@ -195,9 +195,9 @@ Your inference data must include:
 ### Initial Model Onboarding
 
 ```bash
-# 1. Edit jpmc-onboarding.py with your configuration
+# 1. Edit model-onboarding.py with your configuration
 # 2. Run the script
-python jpmc-onboarding.py
+python model-onboarding.py
 ```
 
 The script will:
@@ -343,7 +343,7 @@ Smart column mapping by name, handles removed columns gracefully.
 **Solutions**:
 1. ✓ Log into Arthur UI at `https://platform.arthur.ai`
 2. ✓ Navigate to your project and find the associated data plane ID
-3. ✓ Set `DATA_PLANE_ID` at the top of [jpmc-onboarding.py](jpmc-onboarding.py):
+3. ✓ Set `DATA_PLANE_ID` at the top of [model-onboarding.py](model-onboarding.py):
    ```python
    DATA_PLANE_ID = "12345678-1234-1234-1234-123456789012"  # Your data plane ID
    ```
@@ -420,12 +420,12 @@ Smart column mapping by name, handles removed columns gracefully.
 
 ---
 
-## Migration from GCS (Expel)
+## Migration from GCS
 
 Key differences when adapting from GCS:
 
-| Aspect | GCS (Expel) | S3 (JPMC) |
-|--------|-------------|-----------|
+| Aspect | GCS | S3 |
+|--------|-----|-----|
 | Connector Type | `ConnectorType.GCS` | `ConnectorType.S3` |
 | Auth Field | `credentials` (JSON) | `access_key_id` + `secret_access_key` OR `role_arn` |
 | Required Fields | `bucket`, `project_id` | `bucket`, `region` |
