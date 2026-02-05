@@ -530,7 +530,7 @@ Each **reported metric** corresponds to one time series in Arthur's metrics stor
 5. **Metric kind**
 
    * `Numeric` – a floating point value
-   * `Sketch` – a sketch-encoded distribution (used for histograms, latency distributions, etc.)
+   * `Sketch` – a [sketch-encoded distribution](https://datasketches.apache.org/) following Apache DataSketches standard (used for histograms, latency distributions, percentile calculations, etc.)
 
    For more on numeric vs sketch metrics, see the **[Types of Metrics](https://docs.arthur.ai/docs/metrics-querying-overview-1#/) section of Metrics & Querying Overview**.
 
