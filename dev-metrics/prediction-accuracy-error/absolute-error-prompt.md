@@ -8,6 +8,6 @@ Metric description: The absolute difference between a predicted value and the ac
 
 How to create an Arthur Platform custom metric: See `/references/how-to-create-a-custom-metric.md` and `/references/overview-metrics-and-querying.md`.  Some of the configuration values are listed in `/references/configuration-options.md`.
 
-Example documentation: See the files in the `/examples/metrics` folder.
+Example custom metrics documentation: See the files in the `/examples/metrics` folder.
 
-Model compatibililty: Examine the `/data` folder and list which data set is compatible with this custom metric. Specify which columns in the dataset are relevant.
+Model dataset compatibililty: Examine the `/data` folder and list which data set is compatible with this custom metric. Specify which columns in the dataset are relevant.

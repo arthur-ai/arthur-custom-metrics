@@ -8,6 +8,6 @@ Metric description: The accuracy of predictions within a 10% error threshold.
 
 How to create an Arthur Platform custom metric: See `/resources/how-to-create-a-custom-metric.md` and `/resources/overview-metrics-and-querying.md`. Additional guideline can be found in `/resources/configuration-options.md`.
 
-Example documentation: See the files in the `/examples/metrics` folder.
+Example custom metrics documentation: See the files in the `/examples/metrics` folder.
 
-Model compatibililty: Examine the `/data` folder and list which dataset is compatible with this custom metric. Specify which columns in the dataset are relevant.
+Model dataset compatibililty: Examine the `/data` folder and list which dataset is compatible with this custom metric. Specify which columns in the dataset are relevant.
