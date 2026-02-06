@@ -1,72 +1,18 @@
 # Arthur Platform Custom Metrics
 
 Comprehensive documentation and examples for building custom metrics and charts in the Arthur AI platform.
+
 This repository provides the following:
-* Reference documentation on how to build custom metrics and charts in `/references`
 * Example custom metrics in `/examples/metrics`
 * Example custom charts in `/examples/charts`
 * Test dataset for various model types in `/data`
-* Example prompts for developing new custom metrics and their generated outputs in `/dev-metrics`
+* Example LLM prompts for developing new custom metrics and their generated outputs in `/dev-metrics`
 * Automation scripts for model onboarding and metric configuration in `/scripts`
 
 Read about Arthur Metrics:
 * [Customize your Arthur dashboard](https://docs.arthur.ai/docs/customize-your-dashboard)
 * [Metrics Querying Overview](https://docs.arthur.ai/docs/metrics-querying-overview-1)
 * [Custom Metrics](https://docs.arthur.ai/docs/custom-metrics)
-
-## Overview
-
-This repository contains metric definitions and chart specifications for:
-- **Binary Classification**
-- **Multi-Classification**
-- **Regression**
-
-Each metric includes:
-- Complete SQL queries with CTEs and aggregations
-- Detailed parameter configurations (Aggregate Arguments)
-- Reported metrics specifications
-- Interpretation guidance
-- Use cases and examples
-- Associated visualization charts
-
-
-### Creating a New Custom Metric
-
-1. **Navigate to the `/dev-metrics` folder** and find an existing prompt similar to what you want to build
-2. **Copy a `-prompt.md` file** (e.g., `absolute-error-prompt.md`) and rename it for your new metric
-3. **Fill out the prompt template** with details about your metric
-4. **Open the repository in your LLM tool** (e.g., Claude Code, Cursor IDE)
-5. **Feed the `-prompt.md` file as the prompt to your LLM** along with the reference documentations
-6. **Review and refine** the generated metric implementation in the corresponding `.md` file
-
-**Note**: See examples in `/examples/metrics` for production-ready metric implementations organized by problem type (binary-classification, multi-classification, regression).
-
-### Generating Test Data
-
-1. **Navigate to the `/data` directory** and choose a dataset generator:
-   - `binary-classifier-card-fraud/` - Binary classification (fraud detection)
-   - `binary-classifier-cc-application/` - Binary classification (credit approval)
-   - `regression-loan-amount-prediction/` - Regression (loan amount prediction)
-   - `regression-housing-price-prediction/` - Regression (housing price prediction)
-
-2. **Install dependencies** (if needed):
-   ```bash
-   pip install pandas numpy pyarrow
-   ```
-
-3. **Run the generator**:
-   ```bash
-   cd data/<dataset-name>/datagen
-   python generate_dataset.py
-   ```
-
-4. **Verify the output** in the `output/` directory
-
-Each dataset generator includes:
-- Realistic synthetic data with proper schemas of +/- 90 days from the current date
-- Ground truth labels and model predictions
-- Time-series data partitioned by date
-- README with dataset-specific documentation
 
 ## Metric Documentation Structure
 
@@ -143,8 +89,46 @@ Clear, descriptive name
 - When to take action
 - Typical value ranges
 
+### Creating a New Custom Metric
+
+1. **Navigate to the `/dev-metrics` folder** and find an existing prompt similar to what you want to build
+2. **Copy a `-prompt.md` file** (e.g., `absolute-error-prompt.md`) and rename it for your new metric
+3. **Fill out the prompt template** with details about your metric
+4. **Open the repository in your LLM tool** (e.g., Claude Code, Cursor IDE)
+5. **Feed the `-prompt.md` file as the prompt to your LLM** along with the reference documentations
+6. **Review and refine** the generated metric implementation in the corresponding `.md` file
+
+**Note**: See examples in `/examples/metrics` for production-ready metric implementations organized by problem type (binary-classification, multi-classification, regression).
+
+### Generating Test Data
+
+1. **Navigate to the `/data` directory** and choose a dataset generator:
+   - `binary-classifier-card-fraud/` - Binary classification (fraud detection)
+   - `binary-classifier-cc-application/` - Binary classification (credit approval)
+   - `regression-loan-amount-prediction/` - Regression (loan amount prediction)
+   - `regression-housing-price-prediction/` - Regression (housing price prediction)
+
+2. **Install dependencies** (if needed):
+   ```bash
+   pip install pandas numpy pyarrow
+   ```
+
+3. **Run the generator**:
+   ```bash
+   cd data/<dataset-name>/datagen
+   python generate_dataset.py
+   ```
+
+4. **Verify the output** in the `output/` directory
+
+Each dataset generator includes:
+- Realistic synthetic data with proper schemas of +/- 90 days from the current date
+- Ground truth labels and model predictions
+- Time-series data partitioned by date
+- README with dataset-specific documentation
+
 ## Automation Scripts
 
-The `/scripts/onboarding` directory contains Python scripts for automating model onboarding and metric configurations in the Arthur platform. These scripts use the Arthur SDK to programmatically set up models, datasets, connectors, and custom metrics.
+The `/scripts/onboarding` directory contains Python scripts for automating model onboarding and metric configuration in the Arthur platform. These scripts use the Arthur SDK to programmatically set up models, datasets, connectors, and custom metrics.
 
 For detailed documentation, see [`/scripts/onboarding/README.md`](scripts/onboarding/README.md).
