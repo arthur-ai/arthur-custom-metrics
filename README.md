@@ -2,11 +2,11 @@
 
 Comprehensive documentation and examples for building custom metrics and charts in the Arthur AI platform.
 This repository provides the following:
-* Reference documentation on how to build custom metrics and charts in `references`
+* Reference documentation on how to build custom metrics and charts in `/references`
 * Example custom metrics in `/examples/metrics`
 * Example custom charts in `/examples/charts`
 * Test dataset for various model types in `/data`
-* Example prompts and generated outputs of custom metrics in `/dev-metrics`
+* Example prompts for developing new custom metrics and their generated outputs in `/dev-metrics`
 
 Read about Arthur Metrics:
 * [Customize your Arthur dashboard](https://docs.arthur.ai/docs/customize-your-dashboard)
@@ -16,9 +16,9 @@ Read about Arthur Metrics:
 ## Overview
 
 This repository contains metric definitions and chart specifications for:
-- **Binary Classification** - 7 metrics, 16 charts
-- **Multi-Classification** - 10 metrics, 23 charts
-- **Regression** - 10 metrics, 12 charts
+- **Binary Classification**
+- **Multi-Classification**
+- **Regression**
 
 Each metric includes:
 - Complete SQL queries with CTEs and aggregations
@@ -62,7 +62,7 @@ Each metric includes:
 4. **Verify the output** in the `output/` directory
 
 Each dataset generator includes:
-- Realistic synthetic data with proper schemas
+- Realistic synthetic data with proper schemas of +/- 90 days from the current date
 - Ground truth labels and model predictions
 - Time-series data partitioned by date
 - README with dataset-specific documentation
@@ -141,29 +141,3 @@ Clear, descriptive name
 - What different patterns mean
 - When to take action
 - Typical value ranges
-
-## Key Concepts
-
-### Time Bucketing
-All metrics use daily aggregation via TimescaleDB's `time_bucket(INTERVAL '1 day', timestamp)`:
-- Provides consistent time series data
-- Reduces data volume
-- Enables trend analysis
-
-### Dimension Columns
-Many metrics include dimension columns:
-- **Binary Classification**: Often subgroup dimensions for fairness analysis
-- **Multi-Classification**: Label name (series) as dimension
-- **Co-occurrence**: Two dimensions (label_1, label_2) for pairs
-
-### NULL Handling
-All queries use `COALESCE` and `NULLIF` for robust handling:
-- `COALESCE(array, ARRAY[]::TEXT[])` - Empty array for NULL
-- `NULLIF(denominator, 0)` - Avoid division by zero
-
-### Array Operations
-Multi-classification metrics heavily use PostgreSQL array functions:
-- `unnest()` - Expand arrays to rows
-- `array_length()` - Count elements
-- `ARRAY(SELECT DISTINCT unnest())` - Deduplicate arrays
-- `CROSS JOIN LATERAL` - Explode arrays with context
