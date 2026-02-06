@@ -7,6 +7,7 @@ This repository provides the following:
 * Example custom charts in `/examples/charts`
 * Test dataset for various model types in `/data`
 * Example prompts for developing new custom metrics and their generated outputs in `/dev-metrics`
+* Automation scripts for model onboarding and metric configuration in `/scripts`
 
 Read about Arthur Metrics:
 * [Customize your Arthur dashboard](https://docs.arthur.ai/docs/customize-your-dashboard)
@@ -141,3 +142,9 @@ Clear, descriptive name
 - What different patterns mean
 - When to take action
 - Typical value ranges
+
+## Automation Scripts
+
+The `/scripts/onboarding` directory contains Python scripts for automating model onboarding and metric configurations in the Arthur platform. These scripts use the Arthur SDK to programmatically set up models, datasets, connectors, and custom metrics.
+
+For detailed documentation, see [`/scripts/onboarding/README.md`](scripts/onboarding/README.md).
