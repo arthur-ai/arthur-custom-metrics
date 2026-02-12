@@ -168,10 +168,6 @@ def generate_dataset(input_csv_path=None, output_dir=None, seed=42, past_days=90
                                            minutes=minutes_offset, seconds=seconds_offset)
         timestamps.append(timestamp)
     
-    # Convert partition dates to date type (for reference)
-    partition_dates = [ts.date() for ts in timestamps]
-    df['partition_date'] = pd.Series(partition_dates, dtype='object')
-    
     # Add timestamp column as datetime objects
     # Convert to UTC timezone-aware timestamps, then format as ISO strings for CSV
     utc_timestamps = [ts.replace(tzinfo=timezone.utc) for ts in timestamps]
@@ -194,7 +190,7 @@ def generate_dataset(input_csv_path=None, output_dir=None, seed=42, past_days=90
             df[col] = df[col].astype(str)
     
     # Reorder columns for better readability
-    column_order = ['partition_date', 'timestamp', 'house_id', 'actual_house_value', 
+    column_order = ['timestamp', 'house_id', 'actual_house_value', 
                     'predicted_house_value', 'longitude', 'latitude', 'housing_median_age',
                     'total_rooms', 'total_bedrooms', 'population', 'households', 
                     'median_income', 'ocean_proximity']
@@ -205,9 +201,6 @@ def generate_dataset(input_csv_path=None, output_dir=None, seed=42, past_days=90
     remaining_cols = [col for col in df.columns if col not in column_order]
     df = df[column_order + remaining_cols]
     
-    # Format partition_date as string for CSV
-    df['partition_date'] = df['partition_date'].astype(str)
-    
     # Save to CSV if output_dir is provided
     if output_dir is not None:
         output_path = Path(output_dir)
@@ -215,7 +208,9 @@ def generate_dataset(input_csv_path=None, output_dir=None, seed=42, past_days=90
         
         # Partition by date into separate CSV files
         files_created = []
-        for partition_date, group_df in df.groupby('partition_date'):
+        # Extract date from timestamp for partitioning
+        df['_partition_date'] = pd.to_datetime(df['timestamp']).dt.date.astype(str)
+        for partition_date, group_df in df.groupby('_partition_date'):
             # Create folder structure: YYYY-MM-DD/
             partition_dir = output_path / partition_date
             partition_dir.mkdir(parents=True, exist_ok=True)
@@ -224,9 +219,15 @@ def generate_dataset(input_csv_path=None, output_dir=None, seed=42, past_days=90
             partition_filename = f"data-{partition_date}.csv"
             output_file = partition_dir / partition_filename
             
+            # Drop the temporary partition date column before saving
+            group_df = group_df.drop(columns=['_partition_date'])
+            
             # Save partitioned data
             group_df.to_csv(output_file, index=False)
             files_created.append(str(output_file))
+        
+        # Drop the temporary partition date column from the main dataframe
+        df = df.drop(columns=['_partition_date'])
         
         print(f"Saved dataset to {len(files_created)} partitioned CSV files")
         print(f"Partition structure: {output_path}/YYYY-MM-DD/data-YYYY-MM-DD.csv")
@@ -244,7 +245,6 @@ if __name__ == '__main__':
     print(f"\nHousing Price Prediction Dataset generated successfully!")
     print(f"Shape: {df.shape}")
     print(f"\nColumn descriptions:")
-    print(f"- partition_date: Partition date (YYYY-MM-DD string)")
     print(f"- timestamp: Timestamp (ISO 8601 format string with UTC timezone)")
     print(f"- house_id: Unique identifier for each house")
     print(f"- actual_house_value: Ground truth median house value (continuous numeric)")
@@ -276,7 +276,9 @@ if __name__ == '__main__':
     print(f"  75th percentile: ${df['predicted_house_value'].quantile(0.75):,.2f}")
     print(f"  Max: ${df['predicted_house_value'].max():,.2f}")
     print(f"\nOcean proximity distribution:\n{df['ocean_proximity'].value_counts().sort_index()}")
-    print(f"\nDate partitions: {df['partition_date'].nunique()} unique dates")
-    print(f"Date range: {df['partition_date'].min()} to {df['partition_date'].max()}")
+    # Extract dates from timestamps for statistics
+    df_dates = pd.to_datetime(df['timestamp']).dt.date.astype(str)
+    print(f"\nDate partitions: {df_dates.nunique()} unique dates")
+    print(f"Date range: {df_dates.min()} to {df_dates.max()}")
     if output_dir is not None:
         print(f"\nSaved to: {output_dir}/YYYY-MM-DD/data-YYYY-MM-DD.csv")
