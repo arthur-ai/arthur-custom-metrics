@@ -91,9 +91,9 @@ Clear, descriptive name
 
 ### Creating a New Custom Metric
 
-1. **Navigate to the `/dev-metrics` folder** and find an existing prompt similar to what you want to build
-2. **Copy a `-prompt.md` file** (e.g., `absolute-error-prompt.md`) and rename it for your new metric
-3. **Fill out the prompt template** with details about your metric
+1. **Navigate to the `/dev-metrics/prompts/` folder** and find an existing prompt similar to what you want to build
+2. **Copy `PROMPT_TEMPLATE.md` or a `-prompt.md` file** (e.g., `absolute-error-prompt.md`) and rename it for your new metric
+3. **Fill out the prompt template** with details about your metric (name, category, description, business use case)
 4. **Open the repository in your LLM tool** (e.g., Claude Code, Cursor IDE)
 5. **Feed the `-prompt.md` file as the prompt to your LLM** along with the reference documentations
 6. **Review and refine** the generated metric implementation in the corresponding `.md` file
