@@ -115,6 +115,8 @@ Reference documents automatically included:
 - `/references/overview-metrics-and-querying.md` - Querying overview
 - `/references/configuration-options.md` - Valid configuration values
 - `/references/platform-default-metrics.md` - Out-of-the-box metrics
+- `/references/sql_schema_metrics_numeric_latest_version.md` - Numeric metrics table schema (for Dashboard Chart SQL)
+- `/references/sql_schema_metrics_sketch_latest_version.md` - Sketch metrics table schema (for Dashboard Chart SQL)
 - Examples from `/examples/metrics/` - Similar metric implementations
 
 ### Python Automation Scripts
@@ -158,6 +160,53 @@ Always handle NULLs in aggregations:
 COALESCE(column_name, 0)  -- For numeric columns
 NULLIF(COUNT(*), 0)       -- Prevent division by zero
 ```
+
+## Dashboard Chart SQL Patterns
+
+Chart SQL queries read from stored metrics tables, not the raw dataset.
+
+### Metrics Tables
+
+**metrics_numeric_latest_version** - For numeric metrics
+- Columns: model_id, project_id, workspace_id, organization_id, metric_name, timestamp, metric_version, value (double precision), dimensions (jsonb)
+
+**metrics_sketch_latest_version** - For sketch/distribution metrics
+- Columns: Same as numeric, but value is user-defined type
+
+### Chart SQL Pattern
+
+```sql
+SELECT
+    time_bucket_gapfill(
+        '1 day',                           -- Time bucket size
+        timestamp,                          -- Timestamp column
+        '{{dateStart}}'::timestamptz,      -- Start of time range
+        '{{dateEnd}}'::timestamptz         -- End of time range
+    ) AS time_bucket_1d,
+
+    metric_name,
+
+    CASE                                    -- Optional: friendly names
+        WHEN metric_name = 'my_metric' THEN 'My Metric'
+        ELSE metric_name
+    END AS friendly_name,
+
+    COALESCE(AVG(value), 0) AS metric_value
+
+FROM metrics_numeric_latest_version        -- Or metrics_sketch_latest_version
+WHERE metric_name IN ('metric1', 'metric2')
+[[AND timestamp BETWEEN '{{dateStart}}' AND '{{dateEnd}}']]  -- Optional filter syntax
+
+GROUP BY time_bucket_1d, metric_name
+ORDER BY time_bucket_1d, metric_name;
+```
+
+**Key elements:**
+- `time_bucket_gapfill()` - Creates continuous time series with no gaps
+- `{{dateStart}}` and `{{dateEnd}}` - Template variables for time range
+- `[[AND ...]]` - Optional filter syntax
+- Filter by `metric_name` - Must match names from "Reported Metrics" section
+- `COALESCE(AVG(value), 0)` - Handle missing values gracefully
 
 ## Configuration Reference
 

@@ -42,6 +42,8 @@ Review these files to understand Arthur Platform custom metric structure:
 - `/references/overview-metrics-and-querying.md` - Querying patterns and best practices
 - `/references/configuration-options.md` - Valid configuration values for parameters
 - `/references/platform-default-metrics.md` - Out-of-the-box metrics for reference
+- `/references/sql_schema_metrics_numeric_latest_version.md` - Schema for numeric metrics table (for Dashboard Chart SQL)
+- `/references/sql_schema_metrics_sketch_latest_version.md` - Schema for sketch metrics table (for Dashboard Chart SQL)
 
 ### Example Implementations
 Study similar metrics in `/examples/metrics/` for patterns:
