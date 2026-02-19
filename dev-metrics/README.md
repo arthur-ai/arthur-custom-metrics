@@ -3,6 +3,21 @@
 This directory contains prompt templates for generating Arthur Platform custom metric documentation using LLMs like Claude Code.
 
 ## Quick Start
+1. Ask Calude Code to prepare a new prompt to develop a new custom metric
+
+Example:
+```
+Create a new /dev-metrics prompt, "Gini Coefficient" as "gini-coefficient-prompt.md" file. The category of the metric is "Model Performance - Classification and Discrimination". The metric is a measure of the discriminatory power of a model; higher values indicate better separation.
+```
+
+2. Ask Claude Code to generate the new metrics documentation with the `ultrathink` keyword
+
+Example:
+```
+Ultrathink and generate the "Gini Coefficient" metric documentation from @dev-metrics/prompts/gini-coefficient-prompt.md
+```
+
+## The More Prescriptive Way
 
 ### Option 1: Use Existing Prompt
 

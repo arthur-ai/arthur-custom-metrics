@@ -3,3 +3,4 @@ model_predictions
 .pytest_cache
 __pycache__
 output
+.idea/
