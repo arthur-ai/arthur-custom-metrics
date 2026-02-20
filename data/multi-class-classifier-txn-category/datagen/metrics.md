@@ -1,0 +1,5 @@
+Multi-Label Precision Recall and F1 Score per Label,Tracks precision recall and F1 score for each spending category independently. Identifies which categories the model classifies well and which have systematic errors.
+Multi-Label Classification Confusion Matrix Per Class,Tracks true positives false positives and false negatives per spending category. Reveals which categories are confused with each other (e.g. groceries misclassified as shopping).
+Multi-Label Classification Count by Class Label,Counts how often each spending category appears in model predictions over time. Monitors predicted category distribution and detects drift in spending pattern predictions.
+Label Coverage Ratio,Proportion of transactions predicted as each spending category over time. Tracks whether the model's category distribution matches expected spending patterns.
+Average Confidence Score per Label,Average model softmax probability for each category across all inferences. Identifies categories where the model is systematically uncertain or overconfident.

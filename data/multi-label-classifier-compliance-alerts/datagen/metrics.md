@@ -1,0 +1,10 @@
+Jaccard Similarity Score,Measures set similarity (Intersection over Union) between predicted and ground truth alert label sets per inference. Ranges 0–1; rewards partial correctness.
+Exact Match Ratio,Proportion of inferences where predicted alert labels exactly match the ground truth label set. Strictest accuracy measure for multi-label models.
+Multi-Label Precision Recall and F1 Score per Label,Tracks precision (what fraction of predicted alerts are correct) recall (what fraction of actual alerts are captured) and F1 (harmonic mean) for each alert type independently over time.
+Multi-Label Classification Confusion Matrix Per Class,Tracks true positives false positives and false negatives for each alert label. Enables per-label precision and recall calculations and identifies which alert types have detection gaps.
+Multi-Label Classification Count by Class Label,Counts how often each alert label appears in model predictions over time. Monitors alert frequency distribution and flags unexpected shifts in alert volume per type.
+Label Coverage Ratio,Proportion of transactions that include each alert label in model predictions. Tracks alert prevalence over time and detects distribution drift per label.
+Label Density,Average number of predicted alert labels per transaction normalized by total possible labels (6). Monitors whether the model is becoming more or less aggressive in flagging alerts.
+Multi-Label Prediction Volume per Inference,Average number of alert labels predicted per transaction over time. Tracks changes in model behavior such as alert inflation or suppression.
+Average Confidence Score per Label,Average model probability score for each alert label across all inferences. Identifies labels where the model is systematically uncertain or overconfident.
+Label Co-occurrence Matrix,Tracks how often pairs of alert labels appear together in the same prediction. Reveals correlated alert patterns (e.g. SANCTIONS and AML co-occurring) and detects unexpected label dependencies.
