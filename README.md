@@ -100,7 +100,7 @@ Clear, descriptive name
 
 **Note**: See examples in `/examples/metrics` for production-ready metric implementations organized by problem type (binary-classification, multi-classification, regression).
 
-### Generating Test Data
+### How to Generate a Synthentic Data Set
 
 1. **Navigate to the `/data` directory** and choose a dataset generator:
    - `binary-classifier-card-fraud/` - Binary classification (fraud detection)
@@ -121,7 +121,7 @@ Clear, descriptive name
 
 4. **Verify the output** in the `output/` directory
 
-Each dataset generator includes:
+Each synthetic dataset generator includes:
 - Realistic synthetic data with proper schemas of +/- 90 days from the current date
 - Ground truth labels and model predictions
 - Time-series data partitioned by date
