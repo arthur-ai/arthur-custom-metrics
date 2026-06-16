@@ -68,6 +68,8 @@ NOTES:
     - The import is a true upsert; re-running it is safe (idempotent).
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -134,7 +136,6 @@ class UpsolveAdminClient:
         self.session = requests.Session()
         self.session.headers.update({
             "Content-Type": "application/json",
-            "x-api-key": api_key,
         })
 
     def _url(self, path: str) -> str:
@@ -142,7 +143,7 @@ class UpsolveAdminClient:
 
     def set_exportable(self, dashboard_ids: list[str], exportable: bool = True) -> dict:
         """Mark dashboards as exportable (or un-mark them)."""
-        payload = {"dashboardIds": dashboard_ids, "isExportable": exportable}
+        payload = {"dashboardIds": dashboard_ids, "isExportable": exportable, "apiKey": self.api_key}
         resp = self.session.post(
             self._url("/v1/api/ucf/dashboards/set-exportable"),
             json=payload,
@@ -155,7 +156,7 @@ class UpsolveAdminClient:
         """Export all exportable dashboards. Returns the encrypted .ucf blob (string)."""
         resp = self.session.post(
             self._url("/v1/api/ucf/dashboards/export"),
-            json={},
+            json={"apiKey": self.api_key},
             verify=self.verify_ssl,
         )
         resp.raise_for_status()
@@ -166,7 +167,7 @@ class UpsolveAdminClient:
         """Import an encrypted .ucf blob into this environment."""
         resp = self.session.post(
             self._url("/v1/api/ucf/dashboards/import"),
-            json={"data": ucf_data},
+            json={"data": ucf_data, "apiKey": self.api_key},
             verify=self.verify_ssl,
         )
         resp.raise_for_status()
