@@ -1,21 +1,4 @@
-"""
-Cloud Run Job: download UCF blob from GCS and import into destination Upsolve.
-
-This job bypasses the 32 MB Cloud Run HTTP request body limit by running
-inside GCP — it downloads the UCF from GCS to local disk, then POSTs it
-to the Upsolve import endpoint from within the GCP network.
-
-If the destination Upsolve is also a Cloud Run service and the 32 MB limit
-still applies (service-to-service calls share the same limit), the job falls
-back to direct PostgreSQL import via psycopg2.
-
-Required env vars:
-    GCS_BUCKET             GCS bucket containing the UCF blob
-    GCS_BLOB               GCS object path (e.g. upsolve-sync/dashboard.ucf)
-    UPSOLVE_DST_HOST       Destination Upsolve base URL
-    UPSOLVE_DST_API_KEY    SKELETON_KEY for destination Upsolve
-    UPSOLVE_DST_CONN_URL   (optional) Postgres connection URL for direct DB import fallback
-"""
+"""Cloud Run Job for the GCS import workflow — see gcs-import/README.md."""
 
 import os
 import sys

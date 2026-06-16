@@ -1,23 +1,4 @@
-"""
-Step 1: Export UCF blob from source Upsolve and upload to GCS.
-
-Run this from inside the AWS VPC (SSM session on EC2) because the source
-Upsolve is on an internal ALB not reachable from the public internet.
-
-Usage (from EC2 SSM session):
-    pip3 install requests
-    python3 1-export-and-upload-to-gcs.py
-
-Required env vars (or edit the constants below):
-    UPSOLVE_SRC_HOST       e.g. https://internal-platform-v4-scope-alb-dev-...amazonaws.com
-    UPSOLVE_SRC_API_KEY    Upsolve SKELETON_KEY for the source environment
-    UPSOLVE_DASHBOARD_IDS  Comma-separated dashboard UUIDs to mark exportable
-    GCS_BUCKET             GCS bucket name
-    GCS_BLOB               GCS object path (e.g. upsolve-sync/dashboard.ucf)
-    GCS_UPLOAD_URL         Presigned GCS PUT URL (generate with: gsutil signurl ...)
-                           OR leave blank and set GOOGLE_APPLICATION_CREDENTIALS
-                           to use the ADC-based upload path.
-"""
+"""Step 1 of the GCS import workflow — see gcs-import/README.md."""
 
 import os
 import sys
@@ -31,9 +12,9 @@ import requests
 # Config — override via env vars or edit here
 # ---------------------------------------------------------------------------
 
-SRC_HOST    = os.getenv("UPSOLVE_SRC_HOST", "https://internal-platform-v4-scope-alb-dev-596696974.us-east-2.elb.amazonaws.com")
-SRC_API_KEY = os.getenv("UPSOLVE_SRC_API_KEY", "bh7fIUvdbTFQbyM8")
-DASHBOARD_IDS = [d.strip() for d in os.getenv("UPSOLVE_DASHBOARD_IDS", "11208a00-4557-44c3-9d79-cf3ffb95525d").split(",")]
+SRC_HOST    = os.getenv("UPSOLVE_SRC_HOST", "")
+SRC_API_KEY = os.getenv("UPSOLVE_SRC_API_KEY", "")
+DASHBOARD_IDS = [d.strip() for d in os.getenv("UPSOLVE_DASHBOARD_IDS", "").split(",") if d.strip()]
 GCS_UPLOAD_URL = os.getenv("GCS_UPLOAD_URL", "")   # presigned PUT URL
 GCS_BUCKET     = os.getenv("GCS_BUCKET", "scope-artifacts-dev")
 GCS_BLOB       = os.getenv("GCS_BLOB", "upsolve-sync/dashboard.ucf")
@@ -52,6 +33,10 @@ def upsolve_post(path, payload):
 
 
 def main():
+    if not SRC_HOST or not SRC_API_KEY or not DASHBOARD_IDS:
+        print("ERROR: UPSOLVE_SRC_HOST, UPSOLVE_SRC_API_KEY, and UPSOLVE_DASHBOARD_IDS must be set.")
+        sys.exit(1)
+
     # 1. Mark dashboards as exportable
     print(f"Marking {len(DASHBOARD_IDS)} dashboard(s) as exportable on {SRC_HOST}")
     result = upsolve_post(

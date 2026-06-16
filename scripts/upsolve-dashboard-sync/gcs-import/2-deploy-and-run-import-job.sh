@@ -29,7 +29,7 @@ JOB_NAME="${JOB_NAME:-upsolve-import-job}"
 GCS_BUCKET="${GCS_BUCKET:-scope-artifacts-dev}"
 GCS_BLOB="${GCS_BLOB:-upsolve-sync/dashboard.ucf}"
 
-UPSOLVE_DST_HOST="${UPSOLVE_DST_HOST:-https://upsolve-service-1004733904168.us-central1.run.app}"
+UPSOLVE_DST_HOST="${UPSOLVE_DST_HOST:-}"
 
 # Fetch secrets from GCP Secret Manager (set these as env vars to skip)
 UPSOLVE_DST_API_KEY="${UPSOLVE_DST_API_KEY:-$(gcloud secrets versions access latest --secret=arthur_upsolve_api_key --project="${GCP_PROJECT}" 2>/dev/null || echo '')}"

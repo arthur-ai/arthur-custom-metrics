@@ -4,3 +4,4 @@ model_predictions
 __pycache__
 output
 .idea/
+.env
