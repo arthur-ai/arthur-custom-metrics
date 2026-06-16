@@ -160,8 +160,11 @@ class UpsolveAdminClient:
             verify=self.verify_ssl,
         )
         resp.raise_for_status()
-        body = resp.json()
-        return body.get("data") or body  # blob is in `data` field
+        try:
+            body = resp.json()
+            return body.get("data") or body
+        except Exception:
+            return resp.text  # UCF blob returned as raw text
 
     def import_dashboards(self, ucf_data: str) -> dict:
         """Import an encrypted .ucf blob into this environment."""
