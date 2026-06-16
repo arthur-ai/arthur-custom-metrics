@@ -1,0 +1,4 @@
+google-cloud-storage
+requests
+psycopg2-binary
+cryptography
