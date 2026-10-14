@@ -39,6 +39,18 @@ Available datasets:
 - `multi-label-classifier-compliance-alerts` - Multi-label compliance alerts
 - `ranking-recsys-ads` - Recommendation / ads ranking (one row per request and position; clicks, conversions, graded relevance; built-in calibration and popularity drift)
 
+### Metric SQL Tests
+
+Run the SQL from the metric docs in DuckDB and compare to pandas reference implementations (see `tests/README.md`):
+
+```bash
+pip install -r tests/requirements.txt
+pytest                                   # DuckDB only
+ARTHUR_TEST_PG_DSN=postgresql://... pytest   # also run in PostgreSQL
+```
+
+Any change to a `## Base Metric SQL` block in `examples/metrics/ranking/` must keep `pytest` green; a new ranking doc must be added to `tests/metrics/test_ranking_sql.py`.
+
 ### Model Onboarding Scripts
 
 Install Arthur SDK:

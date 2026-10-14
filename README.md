@@ -8,6 +8,7 @@ This repository provides the following:
 * Test dataset for various model types in `/data`
 * Example LLM prompts for developing new custom metrics and their generated outputs in `/dev-metrics`
 * Automation scripts for model onboarding and metric configuration in `/scripts`
+* A test harness that executes the metric SQL from the docs in DuckDB in `/tests` (see [`tests/README.md`](tests/README.md))
 
 Read about Arthur Metrics:
 * [Customize your Arthur dashboard](https://docs.arthur.ai/docs/customize-your-dashboard)
