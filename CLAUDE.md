@@ -36,6 +36,8 @@ Available datasets:
 - `binary-classifier-cc-application` - Credit approval
 - `regression-loan-amount-prediction` - Loan amount prediction
 - `regression-housing-price-prediction` - Housing price prediction
+- `multi-label-classifier-compliance-alerts` - Multi-label compliance alerts
+- `ranking-recsys-ads` - Recommendation / ads ranking (one row per request and position; clicks, conversions, graded relevance; built-in calibration and popularity drift)
 
 ### Model Onboarding Scripts
 
@@ -72,7 +74,7 @@ python duplicate-metrics-to-new-datasets.py # Copy metrics between datasets
 All metrics in `/examples/metrics/` follow this standard structure:
 
 1. **Overview** - What the metric tracks, when to use it
-2. **Step 1: Write the SQL** - Complete SQL query with TimescaleDB `time_bucket()` aggregation
+2. **Step 1: Write the SQL** - Complete DuckDB SQL query with `time_bucket()` aggregation
 3. **Step 2: Fill Basic Information** - Name and description
 4. **Step 3: Configure Aggregate Arguments** - Parameters (Dataset, Column, Literal types)
 5. **Step 4: Configure Reported Metrics** - Output specification (value column, timestamp column, metric kind)
@@ -83,6 +85,9 @@ Metrics are organized by model type:
 - `binary-classification/` - Binary classification metrics (Gini, PSI, error profiles)
 - `multi-classification/` - Multi-label metrics (Jaccard, coverage, confusion matrix)
 - `regression/` - Regression metrics (RMSE, MAD, percentage errors)
+- `ranking/` - Recommendation, search and ads ranking metrics (NDCG/MAP/MRR/Precision/Recall/Hit Rate @K, calibration ratio and ECE, reliability bins, catalog coverage and exposure, slate diversity)
+
+Ranking metrics expect impression-level data (one row per request and position) unless the doc says otherwise. The slate-array variant of Top-K Ranking Quality takes one row per request with ordered item arrays.
 
 ### Chart Documentation Structure
 
@@ -139,9 +144,9 @@ For automation/CI-CD, use service account authentication (see `using-sdk-with-se
 
 ## Key SQL Patterns
 
-### TimescaleDB Time Bucketing
+### Time Bucketing
 
-All time-series metrics use TimescaleDB's `time_bucket()`:
+All time-series metrics use `time_bucket()` (available in both DuckDB and TimescaleDB):
 ```sql
 time_bucket(INTERVAL '1 day', {{timestampColumnName}}) AS ts
 ```
@@ -163,7 +168,7 @@ NULLIF(COUNT(*), 0)       -- Prevent division by zero
 
 ## Dashboard Chart SQL Patterns
 
-Chart SQL queries read from stored metrics tables, not the raw dataset.
+Chart SQL queries read from stored metrics tables, not the raw dataset. The metrics tables live in TimescaleDB/PostgreSQL, so chart SQL uses TimescaleDB syntax such as `time_bucket_gapfill()` and `jsonb` operators.
 
 ### Metrics Tables
 
@@ -234,7 +239,7 @@ String, Integer, Float, Boolean, UUID, Timestamp, Date, JSON
 
 ## Important Notes
 
-- Metric SQL queries must use TimescaleDB/PostgreSQL syntax
+- Custom metric SQL is evaluated with DuckDB (see `references/how-to-create-a-custom-metric.md`); dashboard chart SQL runs against TimescaleDB/PostgreSQL. DuckDB is close to PostgreSQL, but keep metric SQL to constructs that work in both: `time_bucket()`, window functions, `unnest`, `generate_subscripts`, `LN()` rather than `LOG(base, x)`, `::int::float` for boolean-or-integer labels. Chart-only functions such as `time_bucket_gapfill()` and `->>` on `jsonb` belong in chart SQL only
 - Test datasets generate data ±90 days from current date by default
 - Model onboarding requires Arthur project ID from the UI
 - S3 file patterns support strftime formatting (`%Y%m%d`) for date partitioning

@@ -28,8 +28,8 @@ Each metric file follows this structure:
 - Data types and formats
 
 ### 3. Base Metric SQL
-- Complete SQL query with CTEs
-- TimescaleDB time_bucket aggregation
+- Complete DuckDB SQL query with CTEs
+- `time_bucket()` aggregation
 - Handles NULL values and edge cases
 
 ### 4. Aggregate Arguments
@@ -75,7 +75,7 @@ Clear, descriptive name
 - Column names and dimensions
 
 ### 3. SQL Query
-- Query to fetch data for visualization
+- TimescaleDB query against the stored metrics tables
 - Often aggregates or filters base metrics
 - Includes time range filters
 
@@ -98,7 +98,7 @@ Clear, descriptive name
 5. **Feed the `-prompt.md` file as the prompt to your LLM** along with the reference documentations
 6. **Review and refine** the generated metric implementation in the corresponding `.md` file
 
-**Note**: See examples in `/examples/metrics` for production-ready metric implementations organized by problem type (binary-classification, multi-classification, regression).
+**Note**: See examples in `/examples/metrics` for production-ready metric implementations organized by problem type (binary-classification, multi-classification, regression, ranking).
 
 ### How to Generate a Synthentic Data Set
 
@@ -107,6 +107,8 @@ Clear, descriptive name
    - `binary-classifier-cc-application/` - Binary classification (credit approval)
    - `regression-loan-amount-prediction/` - Regression (loan amount prediction)
    - `regression-housing-price-prediction/` - Regression (housing price prediction)
+   - `multi-label-classifier-compliance-alerts/` - Multi-label classification (compliance alerts)
+   - `ranking-recsys-ads/` - Recommendation / ads ranking (impression-level slates with clicks and conversions)
 
 2. **Install dependencies** (if needed):
    ```bash
