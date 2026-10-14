@@ -72,9 +72,10 @@ Study similar metrics in `/examples/metrics/` for patterns:
 - **Binary Classification:** `/examples/metrics/binary-classification/` - For classification metrics
 - **Multi-Classification:** `/examples/metrics/multi-classification/` - For multi-label metrics
 - **Regression:** `/examples/metrics/regression/` - For continuous value metrics
+- **Ranking:** `/examples/metrics/ranking/` - For recommendation, search and ads ranking metrics (per-request top-K metrics, calibration, coverage, diversity)
 
 Key patterns to review:
-- SQL structure with TimescaleDB `time_bucket()` aggregation
+- DuckDB SQL structure with `time_bucket()` aggregation
 - NULL handling and edge case management
 - Aggregate argument configuration
 - Reported metrics specification
@@ -91,6 +92,8 @@ Available test datasets:
 - `binary-classifier-cc-application/` - Credit approval with approval_score, is_approved
 - `regression-loan-amount-prediction/` - Loan amount with predicted_amount, actual_amount
 - `regression-housing-price-prediction/` - Housing prices with predicted_price, actual_price
+- `multi-label-classifier-compliance-alerts/` - Multi-label alerts with predicted_labels, ground_truth_labels arrays
+- `ranking-recsys-ads/` - Impression-level ranking logs with request_id, position, item_id, item_category, predicted_score, clicked, relevance_grade
 
 ---
 
@@ -146,7 +149,7 @@ The generated documentation must include these sections in order:
 
 ### 2. Step 1: Write the SQL
 - Complete SQL query with CTEs if needed
-- TimescaleDB `time_bucket()` for time-series aggregation
+- DuckDB SQL (custom metrics run in DuckDB) with `time_bucket()` for time-series aggregation
 - Proper NULL handling with `COALESCE()` or `NULLIF()`
 - Comments explaining complex logic
 - Template variables using `{{variable}}` syntax
